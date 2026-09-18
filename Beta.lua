@@ -3,9 +3,10 @@ PerryUI.__index = PerryUI
 
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local ContextActionService = game:GetService("ContextActionService")
 local CoreGui = game:GetService("CoreGui")
 
--- Система уведомлений (выплывают справа)
+-- Система уведомлений (справа)
 local NoticeContainer = Instance.new("Frame")
 NoticeContainer.Name = "PerryUI_Notices"
 NoticeContainer.Size = UDim2.new(0, 250, 1, -20)
@@ -29,7 +30,7 @@ function PerryUI:Notify(titleText, messageText, duration)
     
     local noticeFrame = Instance.new("Frame")
     noticeFrame.Size = UDim2.new(1, 0, 0, 55)
-    noticeFrame.Position = UDim2.new(1, 20, 0, 0) -- Старт за пределами экрана
+    noticeFrame.Position = UDim2.new(1, 20, 0, 0)
     noticeFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
     noticeFrame.BorderSizePixel = 0
     noticeFrame.Parent = NoticeContainer
@@ -65,12 +66,10 @@ function PerryUI:Notify(titleText, messageText, duration)
     nDesc.BackgroundTransparency = 1
     nDesc.Parent = noticeFrame
 
-    -- Анимация появления справа
     TweenService:Create(noticeFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
         Position = UDim2.new(0, 0, 0, 0)
     }):Play()
 
-    -- Авто-исчезновение
     task.delay(dur, function()
         local tweenOut = TweenService:Create(noticeFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
             Position = UDim2.new(1, 30, 0, 0)
@@ -82,24 +81,43 @@ function PerryUI:Notify(titleText, messageText, duration)
     end)
 end
 
--- Перетаскивание (Мышь + Тачскрин)
+-- Перетаскивание БЕЗ вращения камеры
 local function makeDraggable(guiObject)
     local dragging, dragInput, dragStart, startPos
+
+    local function freezeCamera(actionName, inputState, inputObject)
+        if dragging then
+            return Enum.ContextAnimationFrameResult.Sink
+        end
+        return Enum.ContextAnimationFrameResult.Pass
+    end
+
     guiObject.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
             startPos = guiObject.Position
+            
+            -- Захватываем ввод, чтобы камера не вращалась
+            ContextActionService:BindActionAtPriority("PerryUI_FreezeCam", function()
+                return Enum.ContextActionResult.Sink
+            end, false, 3000, Enum.UserInputType.MouseMovement, Enum.UserInputType.Touch)
+
             input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                    ContextActionService:UnbindAction("PerryUI_FreezeCam")
+                end
             end)
         end
     end)
+
     guiObject.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
             dragInput = input
         end
     end)
+
     UserInputService.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
             local delta = input.Position - dragStart
@@ -120,11 +138,10 @@ function PerryUI.CreateWindow(titleText, subtitleText)
         screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
     end
 
-    -- Названия по умолчанию, если скриптер их не передал
     local scriptTitle = titleText or "MyScript"
     local scriptSubtitle = subtitleText or "Script Subtitle"
 
-    -- Виджет сверху при сворачивании
+    -- Виджет сверху
     local topWidget = Instance.new("Frame")
     topWidget.Name = "TopWidget"
     topWidget.Size = UDim2.new(0, 220, 0, 44)
@@ -329,6 +346,57 @@ function PerryUI:CreateTab(name)
     tab.Content = tabContent
     table.insert(self.Tabs, tab)
 
+    -- Одноразовая кнопка (Button)
+    function tab:AddButton(titleText, descText, callback)
+        local btnFrame = Instance.new("Frame")
+        btnFrame.Size = UDim2.new(1, -8, 0, 48)
+        btnFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+        btnFrame.Parent = tabContent
+        
+        local bCorner = Instance.new("UICorner")
+        bCorner.CornerRadius = UDim.new(0, 8)
+        bCorner.Parent = btnFrame
+        
+        local bTitle = Instance.new("TextLabel")
+        bTitle.Text = titleText
+        bTitle.Font = Enum.Font.GothamBold
+        bTitle.TextSize = 13
+        bTitle.TextColor3 = Color3.fromRGB(240, 240, 240)
+        bTitle.Position = UDim2.new(0, 12, 0, 7)
+        bTitle.Size = UDim2.new(1, -24, 0, 18)
+        bTitle.TextXAlignment = Enum.TextXAlignment.Left
+        bTitle.BackgroundTransparency = 1
+        bTitle.Parent = btnFrame
+
+        local bDesc = Instance.new("TextLabel")
+        bDesc.Text = descText or ""
+        bDesc.Font = Enum.Font.Gotham
+        bDesc.TextSize = 11
+        bDesc.TextColor3 = Color3.fromRGB(120, 120, 120)
+        bDesc.Position = UDim2.new(0, 12, 0, 25)
+        bDesc.Size = UDim2.new(1, -24, 0, 16)
+        bDesc.TextXAlignment = Enum.TextXAlignment.Left
+        bDesc.BackgroundTransparency = 1
+        bDesc.Parent = btnFrame
+
+        local clickBtn = Instance.new("TextButton")
+        clickBtn.Size = UDim2.new(1, 0, 1, 0)
+        clickBtn.BackgroundTransparency = 1
+        clickBtn.Text = ""
+        clickBtn.Parent = btnFrame
+
+        clickBtn.MouseButton1Click:Connect(function()
+            -- Анимация клика
+            TweenService:Create(btnFrame, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}):Play()
+            task.delay(0.1, function()
+                TweenService:Create(btnFrame, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(18, 18, 18)}):Play()
+            end)
+            
+            if callback then callback() end
+        end)
+    end
+
+    -- Переключатель (Toggle)
     function tab:AddToggle(titleText, descText, defaultValue, callback)
         local state = defaultValue or false
         
