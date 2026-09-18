@@ -1,3 +1,6 @@
+-- ==========================================
+-- БИБЛИОТЕКА PERRYUI
+-- ==========================================
 local PerryUI = {}
 PerryUI.__index = PerryUI
 
@@ -5,6 +8,8 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local ContextActionService = game:GetService("ContextActionService")
 local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
 
 -- Система уведомлений (справа)
 local NoticeContainer = Instance.new("Frame")
@@ -16,7 +21,7 @@ NoticeContainer.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 pcall(function() NoticeContainer.Parent = CoreGui end)
 if not NoticeContainer.Parent then
-    NoticeContainer.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+    NoticeContainer.Parent = LocalPlayer:WaitForChild("PlayerGui")
 end
 
 local noticeLayout = Instance.new("UIListLayout")
@@ -85,13 +90,6 @@ end
 local function makeDraggable(guiObject)
     local dragging, dragInput, dragStart, startPos
 
-    local function freezeCamera(actionName, inputState, inputObject)
-        if dragging then
-            return Enum.ContextAnimationFrameResult.Sink
-        end
-        return Enum.ContextAnimationFrameResult.Pass
-    end
-
     guiObject.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
@@ -135,13 +133,13 @@ function PerryUI.CreateWindow(titleText, subtitleText)
     
     pcall(function() screenGui.Parent = CoreGui end)
     if not screenGui.Parent then
-        screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+        screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
     end
 
     local scriptTitle = titleText or "MyScript"
     local scriptSubtitle = subtitleText or "Script Subtitle"
 
-    -- Виджет сверху
+    -- Виджет сверху (при сворачивании)
     local topWidget = Instance.new("Frame")
     topWidget.Name = "TopWidget"
     topWidget.Size = UDim2.new(0, 220, 0, 44)
@@ -346,7 +344,7 @@ function PerryUI:CreateTab(name)
     tab.Content = tabContent
     table.insert(self.Tabs, tab)
 
-    -- Одноразовая кнопка (Button)
+    -- Кнопка (Button)
     function tab:AddButton(titleText, descText, callback)
         local btnFrame = Instance.new("Frame")
         btnFrame.Size = UDim2.new(1, -8, 0, 48)
@@ -386,7 +384,6 @@ function PerryUI:CreateTab(name)
         clickBtn.Parent = btnFrame
 
         clickBtn.MouseButton1Click:Connect(function()
-            -- Анимация клика
             TweenService:Create(btnFrame, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}):Play()
             task.delay(0.1, function()
                 TweenService:Create(btnFrame, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(18, 18, 18)}):Play()
@@ -476,5 +473,37 @@ function PerryUI:CreateTab(name)
     return tab
 end
 
-return PerryUI
+-- ==========================================
+-- ПРИМЕР ИСПОЛЬЗОВАНИЯ (Добавлен в конец)
+-- ==========================================
 
+-- 1. Создаем окно интерфейса
+local Window = PerryUI.CreateWindow("Perry Hub", "v1.0 | Test Build")
+
+-- 2. Создаем вкладки
+local MainTab = Window:CreateTab("Главная")
+local SettingsTab = Window:CreateTab("Настройки")
+
+-- 3. Добавляем элементы во вкладку "Главная"
+MainTab:AddButton("Тестовая кнопка", "Нажми, чтобы проверить уведомление", function()
+    PerryUI:Notify("Привет!", "Кнопка успешно нажата и работает!", 3)
+end)
+
+MainTab:AddToggle("Супер-прыжок", "Увеличивает высоту прыжка игрока", false, function(state)
+    local character = LocalPlayer.Character
+    if character and character:FindFirstChild("Humanoid") then
+        if state then
+            character.Humanoid.JumpPower = 100
+            PerryUI:Notify("Включено", "Сила прыжка повышена", 2)
+        else
+            character.Humanoid.JumpPower = 50
+            PerryUI:Notify("Выключено", "Прыжок возвращен к стандартному", 2)
+        end
+    end
+end)
+
+-- 4. Добавляем элементы во вкладку "Настройки"
+SettingsTab:AddButton("Очистить память", "Вызывает сборщик мусора", function()
+    collectgarbage()
+    PerryUI:Notify("Очистка", "Мусор успешно удален из памяти", 2)
+end)
