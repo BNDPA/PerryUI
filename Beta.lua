@@ -5,40 +5,105 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
 
--- Функция для универсального перетаскивания (Мышь + Тачскрин)
-local function makeDraggable(guiObject)
-    local dragging = false
-    local dragInput, dragStart, startPos
+-- Система уведомлений (выплывают справа)
+local NoticeContainer = Instance.new("Frame")
+NoticeContainer.Name = "PerryUI_Notices"
+NoticeContainer.Size = UDim2.new(0, 250, 1, -20)
+NoticeContainer.Position = UDim2.new(1, -260, 0, 10)
+NoticeContainer.BackgroundTransparency = 1
+NoticeContainer.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
+pcall(function() NoticeContainer.Parent = CoreGui end)
+if not NoticeContainer.Parent then
+    NoticeContainer.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local noticeLayout = Instance.new("UIListLayout")
+noticeLayout.SortOrder = Enum.SortOrder.LayoutOrder
+noticeLayout.Padding = UDim.new(0, 8)
+noticeLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+noticeLayout.Parent = NoticeContainer
+
+function PerryUI:Notify(titleText, messageText, duration)
+    local dur = duration or 3
+    
+    local noticeFrame = Instance.new("Frame")
+    noticeFrame.Size = UDim2.new(1, 0, 0, 55)
+    noticeFrame.Position = UDim2.new(1, 20, 0, 0) -- Старт за пределами экрана
+    noticeFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+    noticeFrame.BorderSizePixel = 0
+    noticeFrame.Parent = NoticeContainer
+    
+    local nCorner = Instance.new("UICorner")
+    nCorner.CornerRadius = UDim.new(0, 8)
+    nCorner.Parent = noticeFrame
+
+    local nStroke = Instance.new("UIStroke")
+    nStroke.Color = Color3.fromRGB(140, 90, 255)
+    nStroke.Thickness = 1
+    nStroke.Parent = noticeFrame
+
+    local nTitle = Instance.new("TextLabel")
+    nTitle.Text = titleText or "Notice"
+    nTitle.Font = Enum.Font.GothamBold
+    nTitle.TextSize = 13
+    nTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    nTitle.Position = UDim2.new(0, 12, 0, 8)
+    nTitle.Size = UDim2.new(1, -24, 0, 16)
+    nTitle.TextXAlignment = Enum.TextXAlignment.Left
+    nTitle.BackgroundTransparency = 1
+    nTitle.Parent = noticeFrame
+
+    local nDesc = Instance.new("TextLabel")
+    nDesc.Text = messageText or ""
+    nDesc.Font = Enum.Font.Gotham
+    nDesc.TextSize = 11
+    nDesc.TextColor3 = Color3.fromRGB(160, 160, 160)
+    nDesc.Position = UDim2.new(0, 12, 0, 26)
+    nDesc.Size = UDim2.new(1, -24, 0, 20)
+    nDesc.TextXAlignment = Enum.TextXAlignment.Left
+    nDesc.BackgroundTransparency = 1
+    nDesc.Parent = noticeFrame
+
+    -- Анимация появления справа
+    TweenService:Create(noticeFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Position = UDim2.new(0, 0, 0, 0)
+    }):Play()
+
+    -- Авто-исчезновение
+    task.delay(dur, function()
+        local tweenOut = TweenService:Create(noticeFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+            Position = UDim2.new(1, 30, 0, 0)
+        })
+        tweenOut:Play()
+        tweenOut.Completed:Connect(function()
+            noticeFrame:Destroy()
+        end)
+    end)
+end
+
+-- Перетаскивание (Мышь + Тачскрин)
+local function makeDraggable(guiObject)
+    local dragging, dragInput, dragStart, startPos
     guiObject.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
             startPos = guiObject.Position
-            
             input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
             end)
         end
     end)
-
     guiObject.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
             dragInput = input
         end
     end)
-
     UserInputService.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
             local delta = input.Position - dragStart
-            guiObject.Position = UDim2.new(
-                startPos.X.Scale, 
-                startPos.X.Offset + delta.X, 
-                startPos.Y.Scale, 
-                startPos.Y.Offset + delta.Y
-            )
+            guiObject.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
     end)
 end
@@ -50,14 +115,16 @@ function PerryUI.CreateWindow(titleText, subtitleText)
     screenGui.Name = "PerryUI_Container"
     screenGui.ResetOnSpawn = false
     
-    pcall(function()
-        screenGui.Parent = CoreGui
-    end)
+    pcall(function() screenGui.Parent = CoreGui end)
     if not screenGui.Parent then
         screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
     end
-    
-    -- 1. Свернутый виджет сверху (Поддержка Touch + Dark)
+
+    -- Названия по умолчанию, если скриптер их не передал
+    local scriptTitle = titleText or "MyScript"
+    local scriptSubtitle = subtitleText or "Script Subtitle"
+
+    -- Виджет сверху при сворачивании
     local topWidget = Instance.new("Frame")
     topWidget.Name = "TopWidget"
     topWidget.Size = UDim2.new(0, 220, 0, 44)
@@ -87,7 +154,7 @@ function PerryUI.CreateWindow(titleText, subtitleText)
     gearIcon.Parent = topWidget
 
     local topTitle = Instance.new("TextLabel")
-    topTitle.Text = titleText or "PerryUI"
+    topTitle.Text = scriptTitle
     topTitle.Font = Enum.Font.GothamBold
     topTitle.TextSize = 14
     topTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -105,12 +172,12 @@ function PerryUI.CreateWindow(titleText, subtitleText)
 
     makeDraggable(topWidget)
 
-    -- 2. Главное окно (Черный стиль + Адаптация под мобильные)
+    -- Главное окно
     local mainFrame = Instance.new("Frame")
     mainFrame.Name = "MainFrame"
     mainFrame.Size = UDim2.new(0, 540, 0, 340)
     mainFrame.Position = UDim2.new(0.5, -270, 0.5, -170)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 10) -- Глубокий черный
+    mainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
     mainFrame.BorderSizePixel = 0
     mainFrame.Parent = screenGui
     
@@ -120,7 +187,6 @@ function PerryUI.CreateWindow(titleText, subtitleText)
     
     makeDraggable(mainFrame)
 
-    -- Кнопки управления (Свернуть и Закрыть)
     local minimizeBtn = Instance.new("TextButton")
     minimizeBtn.Text = "-"
     minimizeBtn.Font = Enum.Font.GothamBold
@@ -155,9 +221,8 @@ function PerryUI.CreateWindow(titleText, subtitleText)
         screenGui:Destroy()
     end)
 
-    -- Название скрипта (Title) и Подзаголовок (Subtitle)
     local title = Instance.new("TextLabel")
-    title.Text = titleText or "KerryHub"
+    title.Text = scriptTitle
     title.Font = Enum.Font.GothamBold
     title.TextSize = 18
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -168,7 +233,7 @@ function PerryUI.CreateWindow(titleText, subtitleText)
     title.Parent = mainFrame
     
     local subtitle = Instance.new("TextLabel")
-    subtitle.Text = subtitleText or "Premium Interface"
+    subtitle.Text = scriptSubtitle
     subtitle.Font = Enum.Font.Gotham
     subtitle.TextSize = 11
     subtitle.TextColor3 = Color3.fromRGB(130, 130, 130)
@@ -178,7 +243,6 @@ function PerryUI.CreateWindow(titleText, subtitleText)
     subtitle.BackgroundTransparency = 1
     subtitle.Parent = mainFrame
 
-    -- Левая панель вкладок
     local sidebar = Instance.new("ScrollingFrame")
     sidebar.Name = "Sidebar"
     sidebar.Size = UDim2.new(0, 135, 1, -65)
@@ -192,7 +256,6 @@ function PerryUI.CreateWindow(titleText, subtitleText)
     sidebarLayout.Padding = UDim.new(0, 6)
     sidebarLayout.Parent = sidebar
 
-    -- Контейнер для тоглов
     local container = Instance.new("Frame")
     container.Name = "Container"
     container.Size = UDim2.new(1, -170, 1, -65)
@@ -300,7 +363,6 @@ function PerryUI:CreateTab(name)
         tDesc.BackgroundTransparency = 1
         tDesc.Parent = toggleFrame
 
-        -- Сам свитер-переключатель
         local switchBG = Instance.new("Frame")
         switchBG.Size = UDim2.new(0, 42, 0, 22)
         switchBG.Position = UDim2.new(1, -54, 0.5, -11)
